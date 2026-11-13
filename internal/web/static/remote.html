@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0d1117">
+<title>CastDeck Remote</title>
+<style>
+  :root { --bg: #0d1117; --panel: #161b22; --line: #30363d; --text: #e6edf3; --muted: #8b949e; --accent: #58a6ff; --err: #f85149; }
+  @media (prefers-color-scheme: light) {
+    :root { --bg: #f6f8fa; --panel: #ffffff; --line: #d0d7de; --text: #1f2328; --muted: #59636e; --accent: #0969da; --err: #cf222e; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  main { max-width: 560px; margin: 0 auto; padding: 16px; display: grid; gap: 16px; }
+  h1 { font-size: 1.4rem; margin: 8px 0 0; }
+  h1 small { display: block; font-size: .9rem; font-weight: normal; color: var(--muted); }
+  section { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 16px; display: grid; gap: 12px; }
+  h2 { margin: 0; font-size: 1rem; color: var(--muted); font-weight: 600; }
+  input[type=url] { width: 100%; font: inherit; padding: 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); color: var(--text); }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; }
+  button { flex: 1 1 auto; font: inherit; padding: 12px 14px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); color: var(--text); min-width: 64px; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+  button:disabled { opacity: .45; }
+  input[type=range] { width: 100%; accent-color: var(--accent); }
+  .times { display: flex; justify-content: space-between; color: var(--muted); font-variant-numeric: tabular-nums; font-size: .9rem; }
+  #now { overflow-wrap: anywhere; }
+  #err { color: var(--err); margin: 0; }
+  #err:empty { display: none; }
+  .muted { color: var(--muted); }
+</style>
+</head>
+<body>
+<main>
+  <h1>CastDeck Remote <small id="name"></small></h1>
+
+  <section>
+    <h2>Play a link</h2>
+    <form id="form" class="row">
+      <input id="url" type="url" required placeholder="https://youtu.be/… or https://…/video.mp4" autocomplete="off">
+      <button class="primary" type="submit">Play on TV</button>
+    </form>
+    <p id="err"></p>
+    <p class="muted" style="margin:0">YouTube links open in the YouTube TV app. Other links (MP4, WebM, HLS .m3u8, MP3, images) play in CastDeck’s player.</p>
+  </section>
+
+  <section>
+    <h2>Now playing</h2>
+    <div id="now" class="muted">Nothing</div>
+    <input id="seek" type="range" min="0" max="0" step="1" value="0" disabled>
+    <div class="times"><span id="pos">0:00</span><span id="dur">0:00</span></div>
+    <div class="row">
+      <button data-skip="-10" disabled>−10s</button>
+      <button id="toggle" disabled>Pause</button>
+      <button data-skip="30" disabled>+30s</button>
+      <button id="stop" disabled>Stop</button>
+    </div>
+    <label class="muted" for="vol">Volume</label>
+    <input id="vol" type="range" min="0" max="1" step="0.05" value="1">
+  </section>
+
+  <section>
+    <h2>TV</h2>
+    <div class="row">
+      <button id="yt">Open YouTube</button>
+      <button id="home">CastDeck home</button>
+    </div>
+  </section>
+</main>
+<script src="/static/common.js"></script>
+<script>
+(() => {
+  const cd = window.castdeck, $ = (s) => document.querySelector(s);
+  let state = null, dragging = false;
+  const ctl = (action, value) => cd.api('/api/control', { action, value });
+
+  $('#form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    $('#err').textContent = '';
+    const r = await cd.api('/api/play', { url: $('#url').value });
+    if (!r.ok) $('#err').textContent = (await r.text()).trim();
+    else $('#url').value = '';
+  });
+  $('#toggle').onclick = () => ctl('toggle');
+  $('#stop').onclick = () => ctl('stop');
+  document.querySelectorAll('[data-skip]').forEach((b) => { b.onclick = () => ctl('skip', +b.dataset.skip); });
+  $('#seek').addEventListener('input', () => { dragging = true; $('#pos').textContent = cd.fmtTime(+$('#seek').value); });
+  $('#seek').addEventListener('change', () => { dragging = false; ctl('seek', +$('#seek').value); });
+  $('#vol').addEventListener('change', () => ctl('volume', +$('#vol').value));
+  $('#yt').onclick = () => cd.api('/api/youtube');
+  $('#home').onclick = () => cd.api('/api/home');
+
+  cd.subscribe((s) => {
+    state = s;
+    $('#name').textContent = s.name;
+    const m = s.media, video = m && m.kind !== 'image';
+    if (s.mode === 'youtube') $('#now').textContent = 'YouTube is open on the TV — control it from the YouTube app.';
+    else $('#now').textContent = m ? (m.title || m.url) : 'Nothing';
+    $('#now').className = m || s.mode === 'youtube' ? '' : 'muted';
+    document.querySelectorAll('[data-skip], #toggle, #seek').forEach((b) => { b.disabled = !video; });
+    $('#stop').disabled = !m;
+    $('#toggle').textContent = s.paused ? 'Play' : 'Pause';
+    if (!dragging) {
+      $('#seek').max = Math.floor(s.duration || 0);
+      $('#seek').value = Math.floor(s.position || 0);
+      $('#pos').textContent = cd.fmtTime(s.position);
+    }
+    $('#dur').textContent = video && !s.duration ? 'LIVE' : cd.fmtTime(s.duration);
+    if (document.activeElement !== $('#vol')) $('#vol').value = s.volume;
+  });
+})();
+</script>
+</body>
+</html>
