@@ -6,6 +6,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -24,6 +25,7 @@ import (
 	"castdeck/internal/browser"
 	"castdeck/internal/config"
 	"castdeck/internal/dial"
+	"castdeck/internal/inhibit"
 	"castdeck/internal/netutil"
 	"castdeck/internal/player"
 	"castdeck/internal/web"
@@ -168,6 +170,11 @@ func run() error {
 		log.Printf("unknown airplay_mode %q; AirPlay disabled", cfg.AirPlayMode)
 	}
 
+	// Keep SteamOS from dimming/sleeping while something is being watched.
+	inh := &inhibit.Inhibitor{}
+	defer inh.Close()
+	go keepAwake(ctx, hub, inh)
+
 	if err := a.Start(); err != nil {
 		return err
 	}
@@ -189,6 +196,25 @@ func run() error {
 	_ = srv.Shutdown(shutdownCtx)
 	time.Sleep(200 * time.Millisecond) // let SSDP send its goodbye
 	return nil
+}
+
+func keepAwake(ctx context.Context, hub *player.Hub, inh *inhibit.Inhibitor) {
+	ch, cancel := hub.Subscribe()
+	defer cancel()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case b, ok := <-ch:
+			if !ok {
+				return
+			}
+			var st player.State
+			if json.Unmarshal(b, &st) == nil {
+				inh.Set(st.Watching())
+			}
+		}
+	}
 }
 
 func writerOrDiscard(f *os.File) io.Writer {

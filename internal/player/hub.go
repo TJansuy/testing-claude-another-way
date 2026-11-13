@@ -41,6 +41,16 @@ type State struct {
 	Ready    bool    `json:"ready"`
 }
 
+// Watching reports whether someone is likely watching the screen: YouTube is
+// open, or media is playing (or a photo is shown). Paused video doesn't count,
+// so the screen can still dim and sleep if playback is left paused.
+func (s State) Watching() bool {
+	if s.Mode == "youtube" {
+		return true
+	}
+	return s.Media != nil && (!s.Paused || s.Media.Kind == "image")
+}
+
 // Hub owns the State and fans out updates.
 type Hub struct {
 	mu        sync.Mutex

@@ -26,8 +26,9 @@ your TV), and anyone on the same network can:
 2. Install **Google Chrome** from the Discover store. CastDeck finds the Chrome
    Flatpak automatically. Chromium, Edge and Brave also work, and Firefox is
    used as a fallback.
-3. Download `castdeck-…-linux-amd64.tar.gz` from the Releases page, or build it
-   yourself (see below). Extract it somewhere permanent, for example
+3. Download `castdeck-…-linux-amd64.tar.gz` from the repository's
+   **Releases** page (the "Latest build" entry is rebuilt on every push), or
+   build it yourself (see below). Extract it somewhere permanent, for example
    `~/Applications/castdeck`.
 4. Run it once with `--install` from a terminal (Konsole):
    ```sh
@@ -91,6 +92,17 @@ That link is remembered across restarts.
   [UxPlay](https://github.com/FDH2/UxPlay) for full AirPlay 2 **screen
   mirroring**, which is what current iPhones need for most apps. UxPlay must
   be installed separately. Its window shows in gaming mode like CastDeck's.
+
+### Screen dimming and sleep
+
+Gaming mode normally dims the screen and then sleeps after a period without
+controller input. While a video is playing (or YouTube is open), CastDeck asks
+the session to keep the screen awake through the standard
+`org.freedesktop.ScreenSaver` D-Bus interface and a logind idle inhibitor. This
+is the same mechanism desktop video players use. It's released as soon as
+playback stops or is paused, or when you return to the home screen, so the
+Deck still sleeps normally when nobody is watching. YouTube's TV app shows its
+own screensaver when it's left idle.
 
 ### Web remote
 
@@ -177,7 +189,8 @@ make test
 
 The binary is fully static (`CGO_ENABLED=0`). The web UI is embedded, so the
 single file is the whole program. GitHub Actions builds every push and
-attaches release archives to `v*` tags.
+publishes the archives as a "Latest build" pre-release. Pushing a `v*` tag
+publishes a versioned release.
 
 ## Project layout
 
@@ -189,5 +202,6 @@ internal/dial/       DIAL server + SSDP discovery (YouTube casting)
 internal/airplay/    AirPlay video/photo receiver, Bonjour, UxPlay supervisor
 internal/player/     shared playback state, pushed to pages over SSE
 internal/web/        HTTP API, on-screen page, web remote (embedded assets)
+internal/inhibit/    keeps the screen awake during playback (D-Bus)
 internal/config/     config file and persistent device identity
 ```

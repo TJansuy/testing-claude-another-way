@@ -135,6 +135,9 @@ func (a *App) Mode() string {
 // LaunchYouTube opens the YouTube TV app. params are the DIAL launch
 // parameters (pairingCode, v, t, ...), passed through as the TV app expects.
 func (a *App) LaunchYouTube(params url.Values) {
+	// Switch mode before clearing media so "someone is watching" never
+	// flickers off (that would briefly release the keep-awake inhibitor).
+	a.setMode(ModeYouTube)
 	a.hub.Stop("")
 	q := url.Values{}
 	for k, v := range params {
@@ -144,7 +147,6 @@ func (a *App) LaunchYouTube(params url.Values) {
 	a.mu.Lock()
 	a.dialData = nil
 	a.mu.Unlock()
-	a.setMode(ModeYouTube)
 	a.open(a.cfg.YouTubeURL + "?" + q.Encode())
 }
 

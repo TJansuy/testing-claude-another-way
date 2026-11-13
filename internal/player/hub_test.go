@@ -30,3 +30,21 @@ func TestReportIgnoresStaleMedia(t *testing.T) {
 		t.Fatal("ended report should clear media")
 	}
 }
+
+func TestWatching(t *testing.T) {
+	cases := []struct {
+		s    State
+		want bool
+	}{
+		{State{Mode: "home"}, false},
+		{State{Mode: "youtube"}, true},
+		{State{Mode: "home", Media: &Media{Kind: "video"}}, true},
+		{State{Mode: "home", Media: &Media{Kind: "video"}, Paused: true}, false},
+		{State{Mode: "home", Media: &Media{Kind: "image"}, Paused: true}, true},
+	}
+	for i, c := range cases {
+		if got := c.s.Watching(); got != c.want {
+			t.Errorf("case %d: got %v want %v", i, got, c.want)
+		}
+	}
+}
